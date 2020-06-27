@@ -12,12 +12,15 @@
 #include "MotionControllerComponent.h"
 #include "XRMotionControllerBase.h" // for FXRMotionControllerBase::RightHandSourceId
 
+#include "MyCharacterMovementComponent.h"
+
 DEFINE_LOG_CATEGORY_STATIC(LogFPChar, Warning, All);
 
 //////////////////////////////////////////////////////////////////////////
 // AFPS_MovementCharacter
 
-AFPS_MovementCharacter::AFPS_MovementCharacter()
+AFPS_MovementCharacter::AFPS_MovementCharacter(const FObjectInitializer& ObjectInitializer)
+	:Super(ObjectInitializer.SetDefaultSubobjectClass<UMyCharacterMovementComponent>(ACharacter::CharacterMovementComponentName))
 {
 	// Set size for collision capsule
 	GetCapsuleComponent()->InitCapsuleSize(55.f, 96.0f);
@@ -82,6 +85,10 @@ AFPS_MovementCharacter::AFPS_MovementCharacter()
 
 	// Uncomment the following line to turn motion controllers on by default:
 	//bUsingMotionControllers = true;
+
+
+	// JG
+
 }
 
 void AFPS_MovementCharacter::BeginPlay()

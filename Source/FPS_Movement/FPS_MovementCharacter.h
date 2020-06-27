@@ -46,7 +46,7 @@ class AFPS_MovementCharacter : public ACharacter
 	class UMotionControllerComponent* L_MotionController;
 
 public:
-	AFPS_MovementCharacter();
+	AFPS_MovementCharacter(const FObjectInitializer& ObjectInitializer);
 
 protected:
 	virtual void BeginPlay();

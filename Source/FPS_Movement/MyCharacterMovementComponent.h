@@ -12,6 +12,13 @@
 UCLASS()
 class FPS_MOVEMENT_API UMyCharacterMovementComponent : public UCharacterMovementComponent
 {
-	GENERATED_BODY()
-	
+  GENERATED_BODY()
+
+	/** Set movement mode to the default based on the current physics volume. */
+	virtual void SetDefaultMovementMode() override;
+	virtual void PhysCustom(float deltaTime, int32 Iterations) override;
+
+public:
+  UPROPERTY(BlueprintReadWrite, EditAnywhere)
+  float CustomBaseAcceleration = 100.f;
 };
