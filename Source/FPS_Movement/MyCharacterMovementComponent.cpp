@@ -18,6 +18,10 @@ void UMyCharacterMovementComponent::PhysCustom(float deltaTime, int32 Iterations
   }
    
   // Custom physics
+  if (GetPawnOwner()->IsLocallyControlled())
+  {
+    GEngine->AddOnScreenDebugMessage(INDEX_NONE, deltaTime, FColor::Green, FString::Printf(TEXT("Velocity: %f, %f, %f"), Velocity.X, Velocity.Y, Velocity.Z));
+  }
   Velocity += Acceleration.GetSafeNormal() * CustomBaseAcceleration * deltaTime;
 
 	FHitResult Hit(1.f);
