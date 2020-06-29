@@ -54,7 +54,22 @@ void UMyCharacterMovementComponent::PhysCustom(float deltaTime, int32 Iterations
   }
    
   // Custom physics
+  // vq3 movement
+  float run_speed = 1280.f; // cm/s
+  float max_accel = 1280.f; // cm/s^2
+  FVector wish_direction = Acceleration.GetSafeNormal();
+
+  // for analog input
+  float wish_magnitude = (Acceleration / MaxAcceleration).Size();
+
+  float current_speed = Velocity | wish_direction;
+  float add_speed = run_speed - current_speed;
+  add_speed = FMath::Max<float>(FMath::Min(add_speed, max_accel * deltaTime), 0);
+  Velocity += wish_direction * add_speed;
+
+#if 0 // Simple floaty movement
   Velocity += Acceleration / MaxAcceleration * CustomBaseAcceleration * deltaTime;
+#endif
 
 	FHitResult Hit(1.f);
 	SafeMoveUpdatedComponent(Velocity * deltaTime, UpdatedComponent->GetComponentQuat(), true, Hit);
