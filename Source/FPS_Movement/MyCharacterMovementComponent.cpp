@@ -54,12 +54,16 @@ void UMyCharacterMovementComponent::PhysCustom(float deltaTime, int32 Iterations
   }
    
   // Custom physics
-  Velocity += Acceleration.GetSafeNormal() * CustomBaseAcceleration * deltaTime;
+  Velocity += Acceleration / MaxAcceleration * CustomBaseAcceleration * deltaTime;
 
 	FHitResult Hit(1.f);
 	SafeMoveUpdatedComponent(Velocity * deltaTime, UpdatedComponent->GetComponentQuat(), true, Hit);
   if (Hit.bBlockingHit)
   {
-    Velocity = FVector::ZeroVector;
+    float usedTime = deltaTime * (Hit.Time);
+    // Make new velocity = old velocity minus the component going directly into the hit
+    Velocity -= Velocity.ProjectOnToNormal(-Hit.Normal);
+    // Continue moving after sliding off the hit
+	  SafeMoveUpdatedComponent(Velocity * (deltaTime - usedTime), UpdatedComponent->GetComponentQuat(), true, Hit);
   }
 }
