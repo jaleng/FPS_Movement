@@ -55,8 +55,11 @@ void UMyCharacterMovementComponent::PhysCustom(float deltaTime, int32 Iterations
    
   // Custom physics
   // vq3 movement
+
+  // TODO(jg): make these data members and make them blueprint-editable
   float run_speed = 1280.f; // cm/s
   float max_accel = 1280.f; // cm/s^2
+
   FVector wish_direction = Acceleration.GetSafeNormal();
 
   // for analog input
@@ -67,12 +70,30 @@ void UMyCharacterMovementComponent::PhysCustom(float deltaTime, int32 Iterations
   add_speed = FMath::Max<float>(FMath::Min(add_speed, max_accel * deltaTime), 0);
   Velocity += wish_direction * add_speed;
 
+  // add ground friction
+  // TODO(jg): make a "jumping" mode where ground friction is not applied
+  // note: ACharacter and UMovementComponent "jumping" behavior has lots of baggage. Will probably not use any of it for our desired jumping behaviors.
+  {
+    float ground_friction_accel = 960.f; // TODO(jg): make data member and blueprint-editable
+                                         // consider making ground friction more realistic (a force affected by character mass and gravity)
+    float adjusted_speed = Velocity.Size() - ground_friction_accel * deltaTime;
+    adjusted_speed = FMath::Max(adjusted_speed, 0.f);
+    Velocity = Velocity.GetSafeNormal() * adjusted_speed;
+  }
+
+
+
 #if 0 // Simple floaty movement
   Velocity += Acceleration / MaxAcceleration * CustomBaseAcceleration * deltaTime;
 #endif
 
+  // Move using the new Velocity
 	FHitResult Hit(1.f);
 	SafeMoveUpdatedComponent(Velocity * deltaTime, UpdatedComponent->GetComponentQuat(), true, Hit);
+
+  // If hit something (eg wall), cancel out the velocity-component going into the wall and finish the move.
+  // The effect is sliding against the wall.
+  // If a second hit happens, we just ignore it for now.
   if (Hit.bBlockingHit)
   {
     float usedTime = deltaTime * (Hit.Time);
