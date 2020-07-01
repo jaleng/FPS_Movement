@@ -28,6 +28,7 @@ void UMyCharacterMovementComponent::TickComponent(float DeltaTime, ELevelTick Ti
     break;
   }
   DrawDebugString(GetWorld(), GetOwner()->GetActorForwardVector() * 100, NetRole, GetOwner(), FColor::White, DeltaTime);
+  //DrawDebugString(GetWorld(), GetOwner()->GetActorForwardVector() * 100, CharacterOwner->bPressedJump ? TEXT("bPressedJump = true") : TEXT("bPressedJump = false") , GetOwner(), FColor::White, DeltaTime);
 
   if (GetPawnOwner()->IsLocallyControlled())
   {
@@ -73,6 +74,7 @@ void UMyCharacterMovementComponent::PhysCustom(float deltaTime, int32 Iterations
   // add ground friction
   // TODO(jg): make a "jumping" mode where ground friction is not applied
   // note: ACharacter and UMovementComponent "jumping" behavior has lots of baggage. Will probably not use any of it for our desired jumping behaviors.
+  if (!CharacterOwner->bPressedJump)
   {
     float ground_friction_accel = 960.f; // TODO(jg): make data member and blueprint-editable
                                          // consider making ground friction more realistic (a force affected by character mass and gravity)
@@ -103,3 +105,193 @@ void UMyCharacterMovementComponent::PhysCustom(float deltaTime, int32 Iterations
 	  SafeMoveUpdatedComponent(Velocity * (deltaTime - usedTime), UpdatedComponent->GetComponentQuat(), true, Hit);
   }
 }
+
+void UMyCharacterMovementComponent::OnMovementUpdated(float DeltaTime, const FVector& OldLocation, const FVector& OldVelocity)
+{
+  Super::OnMovementUpdated(DeltaTime, OldLocation, OldVelocity);
+
+  if (!CharacterOwner)
+  {
+    return;
+  }
+
+  //Set Max Walk Speed
+  if (bRequestMaxWalkSpeedChange)
+  {
+    bRequestMaxWalkSpeedChange = false;
+    MaxWalkSpeed = MyNewMaxWalkSpeed;
+  }
+
+  //Dodge
+  if (bWantsToDodge)
+  {
+    bWantsToDodge = false;
+
+    //Only dodge if on the ground (in the air causes problems trying to get the two modes to line up due to friction)
+    if (IsMovingOnGround())
+    {
+      MoveDirection.Normalize();
+      FVector DodgeVelocity = MoveDirection * DodgeStrength;
+      //Set Z component to zero so we don't go up
+      DodgeVelocity.Z = 0.0f;
+
+      Launch(DodgeVelocity);
+    }
+  }
+}
+
+void UMyCharacterMovementComponent::UpdateFromCompressedFlags(uint8 Flags)//Client only
+{
+  Super::UpdateFromCompressedFlags(Flags);
+
+  bRequestMaxWalkSpeedChange = (Flags & FSavedMove_Character::FLAG_Custom_0) != 0;
+  bWantsToDodge = (Flags & FSavedMove_Character::FLAG_Custom_1) != 0;
+}
+
+class FNetworkPredictionData_Client* UMyCharacterMovementComponent::GetPredictionData_Client() const
+{
+  check(PawnOwner != NULL);
+  //check(PawnOwner->GetLocalRole() < ROLE_Authority);
+
+  if (!ClientPredictionData)
+  {
+    UMyCharacterMovementComponent* MutableThis = const_cast<UMyCharacterMovementComponent*>(this);
+
+    MutableThis->ClientPredictionData = new FNetworkPredictionData_Client_My(*this);
+    MutableThis->ClientPredictionData->MaxSmoothNetUpdateDist = 92.f;
+    MutableThis->ClientPredictionData->NoSmoothNetUpdateDist = 140.f;
+  }
+
+  return ClientPredictionData;
+}
+
+void UMyCharacterMovementComponent::FSavedMove_My::Clear()
+{
+  Super::Clear();
+
+  bSavedRequestMaxWalkSpeedChange = false;
+  bSavedWantsToDodge = false;
+  SavedMoveDirection = FVector::ZeroVector;
+}
+
+uint8 UMyCharacterMovementComponent::FSavedMove_My::GetCompressedFlags() const
+{
+  uint8 Result = Super::GetCompressedFlags();
+
+  if (bSavedRequestMaxWalkSpeedChange)
+  {
+    Result |= FLAG_Custom_0;
+  }
+
+  if (bSavedWantsToDodge)
+  {
+    Result |= FLAG_Custom_1;
+  }
+
+  return Result;
+}
+
+bool UMyCharacterMovementComponent::FSavedMove_My::CanCombineWith(const FSavedMovePtr& NewMove, ACharacter* Character, float MaxDelta) const
+{
+  //Set which moves can be combined together. This will depend on the bit flags that are used.	
+  if (bSavedRequestMaxWalkSpeedChange != ((FSavedMove_My*)&NewMove)->bSavedRequestMaxWalkSpeedChange)
+  {
+    return false;
+  }
+  if (bSavedWantsToDodge != ((FSavedMove_My*)&NewMove)->bSavedWantsToDodge)
+  {
+    return false;
+  }
+  if (SavedMoveDirection != ((FSavedMove_My*)&NewMove)->SavedMoveDirection)
+  {
+    return false;
+  }
+
+  return Super::CanCombineWith(NewMove, Character, MaxDelta);
+}
+
+void UMyCharacterMovementComponent::FSavedMove_My::SetMoveFor(ACharacter* Character, float InDeltaTime, FVector const& NewAccel, class FNetworkPredictionData_Client_Character& ClientData)
+{
+  Super::SetMoveFor(Character, InDeltaTime, NewAccel, ClientData);
+
+  UMyCharacterMovementComponent* CharacterMovement = Cast<UMyCharacterMovementComponent>(Character->GetCharacterMovement());
+  if (CharacterMovement)
+  {
+    bSavedRequestMaxWalkSpeedChange = CharacterMovement->bRequestMaxWalkSpeedChange;
+    bSavedWantsToDodge = CharacterMovement->bWantsToDodge;
+    SavedMoveDirection = CharacterMovement->MoveDirection;
+  }
+}
+
+void UMyCharacterMovementComponent::FSavedMove_My::PrepMoveFor(class ACharacter* Character)
+{
+  Super::PrepMoveFor(Character);
+
+  UMyCharacterMovementComponent* CharacterMovement = Cast<UMyCharacterMovementComponent>(Character->GetCharacterMovement());
+  if (CharacterMovement)
+  {
+    CharacterMovement->MoveDirection = SavedMoveDirection;
+  }
+}
+
+UMyCharacterMovementComponent::FNetworkPredictionData_Client_My::FNetworkPredictionData_Client_My(const UCharacterMovementComponent& ClientMovement)
+  : Super(ClientMovement)
+{
+
+}
+
+FSavedMovePtr UMyCharacterMovementComponent::FNetworkPredictionData_Client_My::AllocateNewMove()
+{
+  return FSavedMovePtr(new FSavedMove_My());
+}
+
+
+//Set Max Walk Speed RPC to transfer the current Max Walk Speed from the Owning Client to the Server
+bool UMyCharacterMovementComponent::Server_SetMaxWalkSpeed_Validate(const float NewMaxWalkSpeed)
+{
+  if (NewMaxWalkSpeed < 0.f || NewMaxWalkSpeed > 2000.f)
+    return false;
+  else
+    return true;
+}
+
+void UMyCharacterMovementComponent::Server_SetMaxWalkSpeed_Implementation(const float NewMaxWalkSpeed)
+{
+  MyNewMaxWalkSpeed = NewMaxWalkSpeed;
+}
+
+void UMyCharacterMovementComponent::SetMaxWalkSpeed(float NewMaxWalkSpeed)
+{
+  if (PawnOwner->IsLocallyControlled())
+  {
+    MyNewMaxWalkSpeed = NewMaxWalkSpeed;
+    Server_SetMaxWalkSpeed(NewMaxWalkSpeed);
+  }
+
+  bRequestMaxWalkSpeedChange = true;
+}
+
+
+//Dodge RPC to transfer the current Move Direction from the Owning Client to the Server
+bool UMyCharacterMovementComponent::Server_MoveDirection_Validate(const FVector& MoveDir)
+{
+  return true;
+}
+
+void UMyCharacterMovementComponent::Server_MoveDirection_Implementation(const FVector& MoveDir)
+{
+  MoveDirection = MoveDir;
+}
+
+//Trigger the Dodge ability on the Owning Client
+void UMyCharacterMovementComponent::Dodge()
+{
+  if (PawnOwner->IsLocallyControlled())
+  {
+    MoveDirection = PawnOwner->GetLastMovementInputVector();
+    Server_MoveDirection(MoveDirection);
+  }
+
+  bWantsToDodge = true;
+}
+
