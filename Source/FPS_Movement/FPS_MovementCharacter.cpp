@@ -88,7 +88,8 @@ AFPS_MovementCharacter::AFPS_MovementCharacter(const FObjectInitializer& ObjectI
 
 
 	// JG
-
+	// Make it so jump can be held forever
+	JumpMaxHoldTime = TNumericLimits<float>::Max();
 }
 
 void AFPS_MovementCharacter::BeginPlay()

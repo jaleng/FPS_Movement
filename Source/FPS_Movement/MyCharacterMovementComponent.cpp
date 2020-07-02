@@ -27,8 +27,10 @@ void UMyCharacterMovementComponent::TickComponent(float DeltaTime, ELevelTick Ti
     NetRole = TEXT("other role");
     break;
   }
-  DrawDebugString(GetWorld(), GetOwner()->GetActorForwardVector() * 100, NetRole, GetOwner(), FColor::White, DeltaTime);
-  //DrawDebugString(GetWorld(), GetOwner()->GetActorForwardVector() * 100, CharacterOwner->bPressedJump ? TEXT("bPressedJump = true") : TEXT("bPressedJump = false") , GetOwner(), FColor::White, DeltaTime);
+  //DrawDebugString(GetWorld(), GetOwner()->GetActorForwardVector() * 100, NetRole, GetOwner(), FColor::White, DeltaTime);
+  DrawDebugString(GetWorld(), GetOwner()->GetActorForwardVector() * 100, 
+    FString::Printf(TEXT("bPressedJump = %s"), CharacterOwner->bPressedJump ? TEXT("true") : TEXT("false")),
+    GetOwner(), FColor::White, DeltaTime);
 
   if (GetPawnOwner()->IsLocallyControlled())
   {
@@ -71,9 +73,7 @@ void UMyCharacterMovementComponent::PhysCustom(float deltaTime, int32 Iterations
   add_speed = FMath::Max<float>(FMath::Min(add_speed, max_accel * deltaTime), 0);
   Velocity += wish_direction * add_speed;
 
-  // add ground friction
-  // TODO(jg): make a "jumping" mode where ground friction is not applied
-  // note: ACharacter and UMovementComponent "jumping" behavior has lots of baggage. Will probably not use any of it for our desired jumping behaviors.
+  // add ground friction unless jumping
   if (!CharacterOwner->bPressedJump)
   {
     float ground_friction_accel = 960.f; // TODO(jg): make data member and blueprint-editable
