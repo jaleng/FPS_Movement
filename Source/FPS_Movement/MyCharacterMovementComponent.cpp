@@ -37,7 +37,7 @@ void UMyCharacterMovementComponent::TickComponent(float DeltaTime, ELevelTick Ti
       
     FString DebugString;
     DebugString.Append(FString::Printf(TEXT("Role: %s | "), *NetRole))
-      .Append(FString::Printf(TEXT("Velocity: %f, %f, %f"), Velocity.X, Velocity.Y, Velocity.Z));
+      .Append(FString::Printf(TEXT("Speed: %f"), Velocity.Size()));
     GEngine->AddOnScreenDebugMessage(INDEX_NONE, -1, FColor::Blue, DebugString);
   }
 #endif // JG_DEBUG
@@ -61,7 +61,8 @@ void UMyCharacterMovementComponent::PhysCustom(float deltaTime, int32 Iterations
 
   // TODO(jg): make these data members and make them blueprint-editable
   float run_speed = 1280.f; // cm/s
-  float max_accel = 1280.f; // cm/s^2
+  float max_accel_air = 1280.f; // cm/s^2
+  float max_accel_ground = 5000.f; // cm/s^2
 
   FVector wish_direction = Acceleration.GetSafeNormal();
 
@@ -70,13 +71,14 @@ void UMyCharacterMovementComponent::PhysCustom(float deltaTime, int32 Iterations
 
   float current_speed = Velocity | wish_direction;
   float add_speed = run_speed - current_speed;
+  float max_accel = CharacterOwner->bPressedJump ? max_accel_air : max_accel_ground;
   add_speed = FMath::Max<float>(FMath::Min(add_speed, max_accel * deltaTime), 0);
   Velocity += wish_direction * add_speed;
 
   // add ground friction unless jumping
   if (!CharacterOwner->bPressedJump)
   {
-    float ground_friction_accel = 960.f; // TODO(jg): make data member and blueprint-editable
+    float ground_friction_accel = 3000.f; // TODO(jg): make data member and blueprint-editable
                                          // consider making ground friction more realistic (a force affected by character mass and gravity)
     float adjusted_speed = Velocity.Size() - ground_friction_accel * deltaTime;
     adjusted_speed = FMath::Max(adjusted_speed, 0.f);
