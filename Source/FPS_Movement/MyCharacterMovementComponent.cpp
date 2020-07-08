@@ -28,10 +28,10 @@ void UMyCharacterMovementComponent::TickComponent(float DeltaTime, ELevelTick Ti
     break;
   }
   //DrawDebugString(GetWorld(), GetOwner()->GetActorForwardVector() * 100, NetRole, GetOwner(), FColor::White, DeltaTime);
-  DrawDebugString(GetWorld(), GetOwner()->GetActorForwardVector() * 100, 
-    //FString::Printf(TEXT("bPressedJump = %s"), CharacterOwner->bPressedJump ? TEXT("true") : TEXT("false")),
-    FString::Printf(TEXT("floor blocking hit = %s"), CurrentFloor.bBlockingHit ? TEXT("true") : TEXT("false")),
-    GetOwner(), FColor::White, DeltaTime);
+  //DrawDebugString(GetWorld(), GetOwner()->GetActorForwardVector() * 100, 
+  //  //FString::Printf(TEXT("bPressedJump = %s"), CharacterOwner->bPressedJump ? TEXT("true") : TEXT("false")),
+  //  FString::Printf(TEXT("floor blocking hit = %s"), CurrentFloor.bBlockingHit ? TEXT("true") : TEXT("false")),
+  //  GetOwner(), FColor::White, DeltaTime);
 
   if (GetPawnOwner()->IsLocallyControlled())
   {
@@ -104,16 +104,15 @@ void UMyCharacterMovementComponent::PhysCustom(float deltaTime, int32 Iterations
 	FHitResult Hit(1.f);
 	SafeMoveUpdatedComponent(Velocity * deltaTime, UpdatedComponent->GetComponentQuat(), true, Hit);
 
-  // If hit something (eg wall), cancel out the velocity-component going into the wall and finish the move.
+  // If hit something (eg wall), cancel out the velocity-component going into the wall and continue moving.
   // The effect is sliding against the wall.
-  // If a second hit happens, we just ignore it for now.
-  if (Hit.bBlockingHit)
+  for (float time_left = deltaTime; Hit.bBlockingHit && Iterations < MaxSimulationIterations; ++Iterations)
   {
-    float usedTime = deltaTime * (Hit.Time);
+    time_left -= time_left * Hit.Time;
     // Make new velocity = old velocity minus the component going directly into the hit
     Velocity -= Velocity.ProjectOnToNormal(-Hit.Normal);
     // Continue moving after sliding off the hit
-	  SafeMoveUpdatedComponent(Velocity * (deltaTime - usedTime), UpdatedComponent->GetComponentQuat(), true, Hit);
+	  SafeMoveUpdatedComponent(Velocity * time_left, UpdatedComponent->GetComponentQuat(), true, Hit);
   }
 }
 
