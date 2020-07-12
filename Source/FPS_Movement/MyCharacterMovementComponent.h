@@ -51,15 +51,52 @@ class FPS_MOVEMENT_API UMyCharacterMovementComponent : public UCharacterMovement
 	virtual void SetDefaultMovementMode() override;
 	virtual void PhysCustom(float deltaTime, int32 Iterations) override;
 
-
 public:
-  UPROPERTY(BlueprintReadWrite, EditAnywhere)
-  float CustomBaseAcceleration = 100.f;
 
   virtual void UpdateFromCompressedFlags(uint8 Flags) override;
   virtual class FNetworkPredictionData_Client* GetPredictionData_Client() const override;
   void OnMovementUpdated(float DeltaTime, const FVector& OldLocation, const FVector& OldVelocity);
 
+  /// Movement parameters
+  UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Movement Parameters")
+  float RunSpeed = 1280.f; // cm/s
+
+  UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Movement Parameters")
+  float MaxAccelAir = 1280.f; // cm/s^2
+
+  UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Movement Parameters")
+  float MaxAccelGround = 5000.f; // cm/s^2
+
+private:
+
+  /**
+   * Calculate horizontal velocity to add using quake algorithm that allows strafe-jumping
+   * @param deltaTime - timeframe to simulate over
+   * @return The calculated velocity that should be added to the total velocity for Q3 movement
+   */
+  FVector GetQ3HorizontalAddVelocity(float deltaTime);
+
+  /**
+   * Move the updated component using Velocity and deltatime. Collisions cancel all velocity normal to the hit.
+   */
+  void RepositionUsingVelocity(float deltaTime, int32 Iterations);
+
+  /**
+   * Apply ground friction if on the ground.
+   */
+  void ApplyGroundFriction(float deltaTime);
+
+  /**
+   * Apply gravity if updated component is not on the floor.
+   */
+  void ApplyGravityToVelocity(float deltaTime);
+
+  /**
+   * Will change vertical velocity to jumping velocity if the player is pressing jump and the character is on the floor
+   */
+  void ApplyJumpStateToVelocity();
+
+public:
   //Set Max Walk Speed
   uint8 bRequestMaxWalkSpeedChange : 1;
 

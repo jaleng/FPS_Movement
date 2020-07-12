@@ -49,6 +49,20 @@ void UMyCharacterMovementComponent::SetDefaultMovementMode()
   SetMovementMode(MOVE_Custom, 1);
 }
 
+FVector UMyCharacterMovementComponent::GetQ3HorizontalAddVelocity(float deltaTime)
+{
+  FVector wish_direction = Acceleration.GetSafeNormal();
+
+  // for analog input
+  float wish_magnitude = (Acceleration / MaxAcceleration).Size();
+
+  float current_speed = Velocity | wish_direction;
+  float add_speed = RunSpeed - current_speed;
+  float max_accel = (!CurrentFloor.bBlockingHit || CharacterOwner->bPressedJump) ? MaxAccelAir : MaxAccelGround;
+  add_speed = FMath::Max<float>(FMath::Min(add_speed, max_accel * deltaTime), 0);
+  return wish_direction * add_speed;
+}
+
 void UMyCharacterMovementComponent::PhysCustom(float deltaTime, int32 Iterations)
 {
   // Call blueprint-event; default behavior copied from vanilla UCharacterMovementComponent
@@ -57,52 +71,18 @@ void UMyCharacterMovementComponent::PhysCustom(float deltaTime, int32 Iterations
     CharacterOwner->K2_UpdateCustomMovement(deltaTime);
   }
    
-  // Custom physics
-  // vq3 movement
-
+  Velocity += GetQ3HorizontalAddVelocity(deltaTime);
   FindFloor(UpdatedComponent->GetComponentLocation(), CurrentFloor, Velocity.IsZero(), NULL);
+  ApplyJumpStateToVelocity();
+  ApplyGravityToVelocity(deltaTime);
+  ApplyGroundFriction(deltaTime);
+  RepositionUsingVelocity(deltaTime, Iterations);
+}
 
-  // TODO(jg): make these data members and make them blueprint-editable
-  float run_speed = 1280.f; // cm/s
-  float max_accel_air = 1280.f; // cm/s^2
-  float max_accel_ground = 5000.f; // cm/s^2
-
-  FVector wish_direction = Acceleration.GetSafeNormal();
-
-  // for analog input
-  float wish_magnitude = (Acceleration / MaxAcceleration).Size();
-
-  float current_speed = Velocity | wish_direction;
-  float add_speed = run_speed - current_speed;
-  float max_accel = (!CurrentFloor.bBlockingHit || CharacterOwner->bPressedJump) ? max_accel_air : max_accel_ground;
-  add_speed = FMath::Max<float>(FMath::Min(add_speed, max_accel * deltaTime), 0);
-  Velocity += wish_direction * add_speed;
-
-  // vertical accel from jumping and gravity
-  if (CharacterOwner->bPressedJump && CurrentFloor.bBlockingHit)
-  {
-    Velocity.Z = JumpZVelocity;
-  }
-  
-  // Apply gravity
-  if (!CurrentFloor.bBlockingHit || CurrentFloor.FloorDist > KINDA_SMALL_NUMBER)
-  {
-    Velocity.Z += GetGravityZ() * deltaTime;
-  }
-
-  // add ground friction unless midair or jumping
-  if (CurrentFloor.bBlockingHit && CurrentFloor.FloorDist < 1 && !CharacterOwner->bPressedJump)
-  {
-    float ground_friction_accel = 3000.f; // TODO(jg): make data member and blueprint-editable
-                                         // consider making ground friction more realistic (a force affected by character mass and gravity)
-    float adjusted_speed = Velocity.Size() - ground_friction_accel * deltaTime;
-    adjusted_speed = FMath::Max(adjusted_speed, 0.f);
-    Velocity = Velocity.GetSafeNormal() * adjusted_speed;
-  }
-
-  // Move using the new Velocity
-	FHitResult Hit(1.f);
-	SafeMoveUpdatedComponent(Velocity * deltaTime, UpdatedComponent->GetComponentQuat(), true, Hit);
+void UMyCharacterMovementComponent::RepositionUsingVelocity(float deltaTime, int32 Iterations)
+{
+  FHitResult Hit(1.f);
+  SafeMoveUpdatedComponent(Velocity * deltaTime, UpdatedComponent->GetComponentQuat(), true, Hit);
 
   // If hit something (eg wall), cancel out the velocity-component going into the wall and continue moving.
   // The effect is sliding against the wall.
@@ -112,7 +92,36 @@ void UMyCharacterMovementComponent::PhysCustom(float deltaTime, int32 Iterations
     // Make new velocity = old velocity minus the component going directly into the hit
     Velocity -= Velocity.ProjectOnToNormal(-Hit.Normal);
     // Continue moving after sliding off the hit
-	  SafeMoveUpdatedComponent(Velocity * time_left, UpdatedComponent->GetComponentQuat(), true, Hit);
+    SafeMoveUpdatedComponent(Velocity * time_left, UpdatedComponent->GetComponentQuat(), true, Hit);
+  }
+}
+
+void UMyCharacterMovementComponent::ApplyGroundFriction(float deltaTime)
+{
+  // add ground friction unless midair or jumping
+  if (CurrentFloor.bBlockingHit && CurrentFloor.FloorDist < 1 && !CharacterOwner->bPressedJump)
+  {
+    float ground_friction_accel = 3000.f; // TODO(jg): make data member and blueprint-editable
+                                         // consider making ground friction more realistic (a force affected by character mass and gravity)
+    float adjusted_speed = Velocity.Size() - ground_friction_accel * deltaTime;
+    adjusted_speed = FMath::Max(adjusted_speed, 0.f);
+    Velocity = Velocity.GetSafeNormal() * adjusted_speed;
+  }
+}
+
+void UMyCharacterMovementComponent::ApplyGravityToVelocity(float deltaTime)
+{
+  if (!CurrentFloor.bBlockingHit || CurrentFloor.FloorDist > KINDA_SMALL_NUMBER)
+  {
+    Velocity.Z += GetGravityZ() * deltaTime;
+  }
+}
+
+void UMyCharacterMovementComponent::ApplyJumpStateToVelocity()
+{
+  if (CharacterOwner->bPressedJump && CurrentFloor.bBlockingHit)
+  {
+    Velocity.Z = JumpZVelocity;
   }
 }
 
