@@ -52,13 +52,18 @@ void UMyCharacterMovementComponent::SetDefaultMovementMode()
 FVector UMyCharacterMovementComponent::GetQ3HorizontalAddVelocity(float deltaTime)
 {
   FVector wish_direction = Acceleration.GetSafeNormal();
+  bool useCpmAirAccel = (!CurrentFloor.bBlockingHit || CharacterOwner->bPressedJump)
+                     && FMath::Abs((UpdatedComponent->GetForwardVector() | wish_direction)) < 0.2f;
+  UE_LOG(LogTemp, Warning, TEXT("useCpmAirAccel: %d"), (int)useCpmAirAccel);
 
   // for analog input
   float wish_magnitude = (Acceleration / MaxAcceleration).Size();
 
   float current_speed = Velocity | wish_direction;
-  float add_speed = RunSpeed - current_speed;
-  float max_accel = (!CurrentFloor.bBlockingHit || CharacterOwner->bPressedJump) ? MaxAccelAir : MaxAccelGround;
+  float run_speed = useCpmAirAccel ? RunSpeed / 10.f : RunSpeed;
+  float add_speed = run_speed - current_speed;
+  float air_accel = useCpmAirAccel ? MaxAccelAir * 70 : MaxAccelAir;
+  float max_accel = (!CurrentFloor.bBlockingHit || CharacterOwner->bPressedJump) ? air_accel : MaxAccelGround;
   add_speed = FMath::Max<float>(FMath::Min(add_speed, max_accel * deltaTime), 0);
   return wish_direction * add_speed;
 }
